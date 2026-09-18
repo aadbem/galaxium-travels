@@ -28,14 +28,14 @@ def list_flights() -> list[FlightOut]:
 
 
 @mcp.tool()
-def book_flight(user_id: int, name: str, flight_id: int) -> BookingOut:
+def book_flight(user_id: int, name: str, flight_id: int, seat_class: str) -> BookingOut:
     """Book a seat on a specific flight for a user.
-    Requires user_id, name, and flight_id.
+    Requires user_id, name, flight_id, and seat_class.
     Decrements available seats if successful.
     Returns booking details or raises an error if booking is not possible."""
     db = SessionLocal()
     try:
-        result = booking.book_flight(db, user_id, name, flight_id)
+        result = booking.book_flight(db, user_id, name, flight_id, seat_class)
         if isinstance(result, ErrorResponse):
             raise Exception(result.details or result.error)
         return result
@@ -148,7 +148,7 @@ def book_flight_endpoint(request: BookingRequest, db: Session = Depends(get_db))
 
     Requires user_id, name, and flight_id. Decrements available seats if successful.
     """
-    return booking.book_flight(db, request.user_id, request.name, request.flight_id)
+    return booking.book_flight(db, request.user_id, request.name, request.flight_id, request.seat_class)
 
 
 @app.get("/bookings/{user_id}", response_model=list[BookingOut], tags=["Bookings"])

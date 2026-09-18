@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, ForeignKey
+from sqlalchemy import Column, Float, Integer, String, ForeignKey
 from sqlalchemy.ext.declarative import declarative_base
 
 Base = declarative_base()
@@ -19,10 +19,19 @@ class Flight(Base):
     price = Column(Integer, nullable=False)
     seats_available = Column(Integer, nullable=False)
 
+class FlightSeatClass(Base):
+    __tablename__ = 'flight_seat_classes'
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    flight_id = Column(Integer, ForeignKey('flights.flight_id'), nullable=False)
+    class_name = Column(String, nullable=False)
+    seats_available = Column(Integer, nullable=False)
+    price_multiplier = Column(Float, nullable=False)
+
 class Booking(Base):
     __tablename__ = 'bookings'
     booking_id = Column(Integer, primary_key=True, index=True, autoincrement=True)
     user_id = Column(Integer, ForeignKey('users.user_id'), nullable=False)
     flight_id = Column(Integer, ForeignKey('flights.flight_id'), nullable=False)
     status = Column(String, nullable=False)
-    booking_time = Column(String, nullable=False) 
+    booking_time = Column(String, nullable=False)
+    seat_class = Column(String, nullable=False, default='economy')

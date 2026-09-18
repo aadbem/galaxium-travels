@@ -1,123 +1,242 @@
-# Galaxium Booking System
+# Galaxium Booking System — Backend
 
-A unified booking system for Galaxium Travels that serves both **REST API** and **MCP (Model Context Protocol)** from a single server.
+Sistema de reservas interplanetárias com suporte duplo de protocolo: **REST API** e **MCP (Model Context Protocol)**, servidos a partir de um único servidor FastAPI.
 
-## Features
+## Stack
 
-- **Dual Protocol Support**: Same business logic exposed via REST and MCP
-- **Single Server**: One codebase, one port, both protocols
-- **SQLite Database**: Simple file-based storage for demos
-- **Demo Data**: Pre-seeded with space travel flights and users
+| Componente | Tecnologia |
+|---|---|
+| Framework | FastAPI |
+| ORM | SQLAlchemy |
+| Validação | Pydantic v2 |
+| Protocolo AI | FastMCP |
+| Banco de dados | SQLite |
+| Servidor ASGI | Uvicorn |
+| Testes | pytest + httpx |
 
 ## Quick Start
 
-### Install Dependencies
-
 ```bash
-cd booking_system
+cd booking_system_backend
+python3 -m venv .venv
+source .venv/bin/activate
 pip install -r requirements.txt
-```
-
-### Run the Server
-
-```bash
 python server.py
 ```
 
-The server starts on port **8080** with:
-- REST endpoints at `/api/*`
-- MCP tools at `/mcp`
-- Health check at `/`
+O servidor sobe na porta **8080**:
+- REST endpoints em `/`
+- Swagger UI em `/docs`
+- MCP endpoint em `/mcp`
+- Health check em `/`
 
-## API Reference
+---
 
-### REST Endpoints
+## REST API
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/api/flights` | List all available flights |
-| POST | `/api/book` | Book a flight |
-| GET | `/api/bookings/{user_id}` | Get user's bookings |
-| POST | `/api/cancel/{booking_id}` | Cancel a booking |
-| POST | `/api/register` | Register a new user |
-| GET | `/api/user?name=...&email=...` | Get user by name and email |
+### Endpoints
 
-### MCP Tools
+| Método | Rota | Descrição |
+|---|---|---|
+| `GET` | `/` | Health check |
+| `GET` | `/flights` | Lista todos os voos disponíveis (com classes de assento) |
+| `POST` | `/book` | Reserva um assento |
+| `GET` | `/bookings/{user_id}` | Lista reservas de um usuário |
+| `POST` | `/cancel/{booking_id}` | Cancela uma reserva |
+| `POST` | `/register` | Registra um novo usuário |
+| `GET` | `/user?name=...&email=...` | Busca usuário por nome e e-mail |
 
-| Tool | Description |
-|------|-------------|
-| `list_flights` | List all available flights |
-| `book_flight` | Book a seat on a flight |
-| `get_bookings` | Get user's bookings |
-| `cancel_booking` | Cancel a booking |
-| `register_user` | Register a new user |
-| `get_user_id` | Get user by name and email |
-
-## Usage Examples
-
-### REST API
+### Exemplos com curl
 
 ```bash
-# List flights
-curl http://localhost:8080/api/flights
+# Health check
+curl http://localhost:8080/
 
-# Register a user
-curl -X POST http://localhost:8080/api/register \
+# Listar voos
+curl http://localhost:8080/flights
+
+# Registrar usuário
+curl -X POST http://localhost:8080/register \
   -H "Content-Type: application/json" \
-  -d '{"name": "John Doe", "email": "john@example.com"}'
+  -d '{"name": "Alice", "email": "alice@example.com"}'
 
-# Book a flight
-curl -X POST http://localhost:8080/api/book \
+# Buscar usuário
+curl "http://localhost:8080/user?name=Alice&email=alice@example.com"
+
+# Reservar voo (seat_class obrigatório: economy | executive | galaxium)
+curl -X POST http://localhost:8080/book \
   -H "Content-Type: application/json" \
-  -d '{"user_id": 1, "name": "Alice", "flight_id": 1}'
+  -d '{"user_id": 1, "name": "Alice", "flight_id": 1, "seat_class": "economy"}'
 
-# Get bookings
-curl http://localhost:8080/api/bookings/1
+# Listar reservas do usuário
+curl http://localhost:8080/bookings/1
 
-# Cancel a booking
-curl -X POST http://localhost:8080/api/cancel/1
+# Cancelar reserva
+curl -X POST http://localhost:8080/cancel/1
 ```
 
-### MCP (with Claude Code or MCP Inspector)
+### Respostas de erro
 
-Connect to `http://localhost:8080/mcp` and use the available tools:
+Todas as rotas retornam HTTP 200 com o corpo abaixo em caso de erro de negócio:
+
+```json
+{
+  "success": false,
+  "error": "Mensagem curta",
+  "error_code": "CODIGO_DO_ERRO",
+  "details": "Descrição detalhada"
+}
+```
+
+#### Códigos de erro
+
+| Código | Situação |
+|---|---|
+| `FLIGHT_NOT_FOUND` | `flight_id` não existe |
+| `SEAT_CLASS_NOT_FOUND` | `seat_class` inválido para o voo |
+| `NO_SEATS_AVAILABLE` | Classe solicitada está lotada |
+| `USER_NOT_FOUND` | `user_id` ou e-mail não encontrado |
+| `NAME_MISMATCH` | Nome não corresponde ao `user_id` |
+| `BOOKING_NOT_FOUND` | `booking_id` não existe |
+| `ALREADY_CANCELLED` | Reserva já foi cancelada |
+| `EMAIL_EXISTS` | E-mail já cadastrado |
+
+---
+
+## MCP Tools
+
+Conecte em `http://localhost:8080/mcp` e use as ferramentas:
+
+| Ferramenta | Parâmetros | Descrição |
+|---|---|---|
+| `list_flights` | — | Lista voos com classes de assento |
+| `book_flight` | `user_id`, `name`, `flight_id`, `seat_class` | Reserva um assento |
+| `get_bookings` | `user_id` | Lista reservas do usuário |
+| `cancel_booking` | `booking_id` | Cancela uma reserva |
+| `register_user` | `name`, `email` | Registra usuário |
+| `get_user_id` | `name`, `email` | Busca usuário por nome e e-mail |
+
+### Exemplos MCP
 
 ```
 list_flights()
-register_user(name="John Doe", email="john@example.com")
-book_flight(user_id=1, name="Alice", flight_id=1)
+register_user(name="Alice", email="alice@example.com")
+book_flight(user_id=1, name="Alice", flight_id=1, seat_class="economy")
 get_bookings(user_id=1)
 cancel_booking(booking_id=1)
 ```
 
-## Testing
+> Erros de negócio são propagados como exceções no MCP (não como `ErrorResponse`).
+
+---
+
+## Classes de Assento
+
+Cada voo possui três classes de assento. O preço por classe é calculado a partir do preço base do voo:
+
+| Classe (`seat_class`) | Label | Multiplicador | Assentos iniciais |
+|---|---|---|---|
+| `economy` | Econômica | 1.0× | 10 |
+| `executive` | Executiva | 1.5× | 5 |
+| `galaxium` | Galaxium | 3.0× | 2 |
+
+**Exemplo:** voo com preço base R$ 1.000.000
+- Econômica: R$ 1.000.000
+- Executiva: R$ 1.500.000
+- Galaxium: R$ 3.000.000
+
+A reserva decrementa `FlightSeatClass.seats_available` da classe escolhida. O cancelamento restaura o assento na mesma classe.
+
+---
+
+## Modelo de Dados
+
+```
+users
+  user_id (PK), name, email (unique)
+
+flights
+  flight_id (PK), origin, destination,
+  departure_time, arrival_time, price, seats_available (legado)
+
+flight_seat_classes
+  id (PK), flight_id (FK → flights), class_name,
+  seats_available, price_multiplier
+
+bookings
+  booking_id (PK), user_id (FK → users),
+  flight_id (FK → flights), status, booking_time, seat_class
+```
+
+> `Flight.seats_available` é um campo legado mantido por compatibilidade. A fonte de verdade para disponibilidade é `FlightSeatClass.seats_available`.
+
+---
+
+## Dados de Demo
+
+O banco é recriado a cada inicialização do servidor via `seed()`.
+
+**10 usuários:** Alice, Bob, Charlie, Diana, Eve, Frank, Grace, Heidi, Ivan, Judy
+
+**10 voos:**
+
+| Origem | Destino | Preço base |
+|---|---|---|
+| Earth | Mars | 1.000.000 |
+| Earth | Moon | 500.000 |
+| Mars | Earth | 950.000 |
+| Venus | Earth | 1.200.000 |
+| Jupiter | Europa | 2.000.000 |
+| Earth | Venus | 1.100.000 |
+| Moon | Mars | 800.000 |
+| Mars | Jupiter | 2.500.000 |
+| Europa | Earth | 3.000.000 |
+| Earth | Pluto | 5.000.000 |
+
+**30 FlightSeatClass rows** (3 por voo: economy, executive, galaxium)
+
+**20 reservas demo** com `seat_class` aleatório e status variado (booked / cancelled / completed)
+
+---
+
+## Testes
 
 ```bash
-# Run all tests
+# Rodar todos os testes
 pytest
 
-# Run with verbose output
-pytest -v
-
-# Run specific test file
+# Somente testes de serviço
 pytest tests/test_services.py
+
+# Somente testes REST
 pytest tests/test_rest.py
+
+# Filtrar por nome
+pytest -k "seat_class"
+
+# Com cobertura
+pytest --cov=. --cov-report=term-missing
 ```
 
-## Project Structure
+Os testes usam SQLite **em memória** — o arquivo `booking.db` não é afetado. O `conftest.py` recria o schema e injeta a sessão de teste em cada função.
+
+---
+
+## Estrutura do Projeto
 
 ```
-booking_system/
-├── server.py          # Main server - exposes REST & MCP
-├── services/          # Business logic layer
-│   ├── booking.py     # Booking operations
-│   ├── flight.py      # Flight operations
-│   └── user.py        # User operations
-├── models.py          # SQLAlchemy ORM models
-├── schemas.py         # Pydantic request/response schemas
-├── db.py              # Database configuration
-├── seed.py            # Demo data seeding
-├── tests/             # Test suite
+booking_system_backend/
+├── server.py          # Servidor principal — REST + MCP
+├── services/
+│   ├── booking.py     # Lógica de reservas
+│   ├── flight.py      # Lógica de voos
+│   └── user.py        # Lógica de usuários
+├── models.py          # Modelos SQLAlchemy (User, Flight, FlightSeatClass, Booking)
+├── schemas.py         # Schemas Pydantic (FlightOut, BookingOut, BookingRequest, …)
+├── db.py              # Configuração do banco de dados
+├── seed.py            # Dados de demo
+├── tests/
+│   ├── conftest.py    # Fixtures: banco em memória + TestClient
 │   ├── test_services.py
 │   └── test_rest.py
 ├── requirements.txt
@@ -125,13 +244,8 @@ booking_system/
 └── pytest.ini
 ```
 
-## Demo Data
+---
 
-The server seeds the database with:
-- **10 users**: Alice, Bob, Charlie, Diana, Eve, Frank, Grace, Heidi, Ivan, Judy
-- **10 flights**: Interplanetary routes (Earth, Mars, Moon, Venus, Jupiter, Europa, Pluto)
-- **20 bookings**: Random bookings across users and flights
-doc
 ## Docker
 
 ```bash
@@ -139,19 +253,34 @@ doc
 docker build -t galaxium-booking .
 
 # Run
-docker run -p 8080:8080 galaxium-booking
+docker run -p 8080:127.0.0.1:8080 galaxium-booking
 ```
 
-## Architecture
+> Para ambientes IBM, use `registry.redhat.io/ubi9/python-311-minimal:latest` como imagem base em vez de `python:3.11-slim`.
 
-The system uses a **service layer** pattern:
+---
 
-1. **Services** (`services/`) - Pure business logic functions
-2. **Server** (`server.py`) - Thin wrappers exposing services via REST and MCP
-3. **Models** (`models.py`) - SQLAlchemy ORM definitions
-4. **Schemas** (`schemas.py`) - Pydantic validation schemas
+## Arquitetura
 
-This architecture ensures:
-- Business logic is tested independently of transport layer
-- Same validation and error handling for both REST and MCP
-- Easy to add new transport layers (GraphQL, gRPC, etc.)
+```
+┌─────────────────────────────────────┐
+│           server.py                 │
+│  ┌─────────────┐  ┌──────────────┐  │
+│  │  FastAPI    │  │   FastMCP    │  │
+│  │ (REST /docs)│  │  (/mcp)      │  │
+│  └──────┬──────┘  └──────┬───────┘  │
+│         └────────┬────────┘          │
+│            services/                 │
+│   booking.py · flight.py · user.py  │
+│                  │                   │
+│         models.py / schemas.py       │
+│                  │                   │
+│            SQLite (booking.db)       │
+└─────────────────────────────────────┘
+```
+
+Padrão de camadas:
+1. **Services** — lógica de negócio pura, retornam `ErrorResponse` em vez de exceções
+2. **Server** — wrappers finos que expõem os services via REST e MCP
+3. **Models** — definições ORM SQLAlchemy
+4. **Schemas** — validação e serialização Pydantic v2

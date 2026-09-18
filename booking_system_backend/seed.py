@@ -1,4 +1,4 @@
-from models import Base, User, Flight, Booking
+from models import Base, User, Flight, Booking, FlightSeatClass
 from db import engine, SessionLocal
 from datetime import datetime, timedelta
 import random
@@ -8,8 +8,9 @@ def seed():
     db = SessionLocal()
     # Clear existing data
     db.query(Booking).delete()
-    db.query(User).delete()
+    db.query(FlightSeatClass).delete()
     db.query(Flight).delete()
+    db.query(User).delete()
     db.commit()
     # Add demo users
     users = [
@@ -41,6 +42,15 @@ def seed():
     ]
     db.add_all(flights)
     db.commit()
+    # Add seat classes for each flight
+    all_flights = db.query(Flight).all()
+    seat_class_rows = []
+    for f in all_flights:
+        seat_class_rows.append(FlightSeatClass(flight_id=f.flight_id, class_name='economy',   seats_available=10, price_multiplier=1.0))
+        seat_class_rows.append(FlightSeatClass(flight_id=f.flight_id, class_name='executive', seats_available=5,  price_multiplier=1.5))
+        seat_class_rows.append(FlightSeatClass(flight_id=f.flight_id, class_name='galaxium',  seats_available=2,  price_multiplier=3.0))
+    db.add_all(seat_class_rows)
+    db.commit()
     # Add demo bookings
     user_ids = [user.user_id for user in db.query(User).all()]
     flight_ids = [flight.flight_id for flight in db.query(Flight).all()]
@@ -52,7 +62,8 @@ def seed():
         flight_id = random.choice(flight_ids)
         status = random.choice(statuses)
         booking_time = (now - timedelta(days=random.randint(0, 30), hours=random.randint(0, 23))).isoformat() + "Z"
-        bookings.append(Booking(user_id=user_id, flight_id=flight_id, status=status, booking_time=booking_time))
+        seat_class = random.choice(["economy", "executive", "galaxium"])
+        bookings.append(Booking(user_id=user_id, flight_id=flight_id, status=status, booking_time=booking_time, seat_class=seat_class))
     db.add_all(bookings)
     db.commit()
     db.close()

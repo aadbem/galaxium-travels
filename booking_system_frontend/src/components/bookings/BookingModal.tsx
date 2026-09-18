@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import type { Flight } from '../../types';
+import type { Flight, SeatClass, FlightSeatClass } from '../../types';
 import { Modal, Button } from '../common';
 import { Plane, Calendar, Clock, DollarSign } from 'lucide-react';
 import { formatCurrency, formatDate, calculateDuration } from '../../utils/formatters';
@@ -14,11 +14,24 @@ interface BookingModalProps {
   onSuccess: () => void;
 }
 
+const CLASS_LABELS: Record<SeatClass, string> = {
+  economy: 'Econômica',
+  executive: 'Executiva',
+  galaxium: 'Galaxium',
+};
+
 export const BookingModal = ({ isOpen, onClose, flight, onSuccess }: BookingModalProps) => {
   const { user } = useUser();
   const [isLoading, setIsLoading] = useState(false);
+  const [selectedClass, setSelectedClass] = useState<SeatClass>('economy');
 
   if (!flight) return null;
+
+  const selectedSeatClass: FlightSeatClass | undefined = flight.seat_classes?.find(
+    (sc) => sc.class_name === selectedClass
+  );
+
+  const isSoldOut = selectedSeatClass?.seats_available === 0;
 
   const handleConfirmBooking = async () => {
     if (!user) {
@@ -33,6 +46,7 @@ export const BookingModal = ({ isOpen, onClose, flight, onSuccess }: BookingModa
         user_id: user.user_id,
         name: user.name,
         flight_id: flight.flight_id,
+        seat_class: selectedClass,
       });
 
       if (isErrorResponse(result)) {
@@ -110,6 +124,52 @@ export const BookingModal = ({ isOpen, onClose, flight, onSuccess }: BookingModa
           </div>
         </div>
 
+        {/* Class Selector */}
+        {flight.seat_classes && flight.seat_classes.length > 0 && (
+          <div>
+            <p className="text-sm font-semibold text-star-white mb-3">
+              Escolha sua Classe
+            </p>
+            <div className="grid grid-cols-3 gap-3">
+              {flight.seat_classes.map((sc) => {
+                const isSelected = selectedClass === sc.class_name;
+                const soldOut = sc.seats_available === 0;
+                const lowSeats = sc.seats_available > 0 && sc.seats_available <= 2;
+
+                return (
+                  <button
+                    key={sc.class_name}
+                    type="button"
+                    disabled={soldOut}
+                    onClick={() => setSelectedClass(sc.class_name)}
+                    className={[
+                      'glass-card p-3 flex flex-col items-center gap-1 rounded-xl border transition-all text-left',
+                      isSelected
+                        ? 'border-cosmic-purple bg-cosmic-purple/20'
+                        : 'border-white/10 bg-white/5 hover:bg-white/10',
+                      soldOut ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer',
+                    ].join(' ')}
+                  >
+                    <span className={`text-sm font-bold ${isSelected ? 'text-cosmic-purple' : 'text-star-white'}`}>
+                      {CLASS_LABELS[sc.class_name]}
+                    </span>
+                    <span className="text-xs font-semibold text-star-white">
+                      {formatCurrency(sc.price)}
+                    </span>
+                    {soldOut ? (
+                      <span className="text-xs font-medium text-red-400">Esgotado</span>
+                    ) : (
+                      <span className={`text-xs ${lowSeats ? 'text-solar-orange font-semibold' : 'text-star-white/60'}`}>
+                        {sc.seats_available} {sc.seats_available === 1 ? 'lugar' : 'lugares'}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
         {/* Passenger Info */}
         {user && (
           <div className="glass-card p-4 bg-white/5">
@@ -128,7 +188,7 @@ export const BookingModal = ({ isOpen, onClose, flight, onSuccess }: BookingModa
             <span className="text-white font-semibold">Total Price</span>
           </div>
           <span className="text-2xl font-bold text-white">
-            {formatCurrency(flight.price)}
+            {formatCurrency(selectedSeatClass?.price ?? flight.price)}
           </span>
         </div>
 
@@ -145,6 +205,7 @@ export const BookingModal = ({ isOpen, onClose, flight, onSuccess }: BookingModa
           <Button
             onClick={handleConfirmBooking}
             isLoading={isLoading}
+            disabled={isSoldOut}
             className="flex-1"
           >
             Confirm Booking

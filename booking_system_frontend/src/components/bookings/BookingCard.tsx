@@ -1,8 +1,20 @@
-import type { Booking, Flight } from '../../types';
+import type { Booking, Flight, SeatClass } from '../../types';
 import { Card, Button } from '../common';
 import { Plane, Calendar, CheckCircle, XCircle, Clock } from 'lucide-react';
 import { formatDate, formatCurrency } from '../../utils/formatters';
 import { motion } from 'framer-motion';
+
+const CLASS_LABELS: Record<SeatClass, string> = {
+  economy: 'Econômica',
+  executive: 'Executiva',
+  galaxium: 'Galaxium',
+};
+
+const CLASS_COLORS: Record<SeatClass, string> = {
+  economy: 'text-blue-400 border-blue-400/40 bg-blue-400/10',
+  executive: 'text-cosmic-purple border-cosmic-purple/40 bg-cosmic-purple/10',
+  galaxium: 'text-solar-orange border-solar-orange/40 bg-solar-orange/10',
+};
 
 interface BookingCardProps {
   booking: Booking;
@@ -40,6 +52,10 @@ export const BookingCard = ({ booking, flight, onCancel, isCancelling }: Booking
 
   const canCancel = booking.status === 'booked';
 
+  const bookedClassPrice = flight?.seat_classes?.find(
+    sc => sc.class_name === booking.seat_class
+  )?.price ?? flight?.price;
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -61,6 +77,11 @@ export const BookingCard = ({ booking, flight, onCancel, isCancelling }: Booking
                 <span className={`text-sm font-semibold capitalize ${getStatusColor()}`}>
                   {booking.status}
                 </span>
+                {booking.seat_class && (
+                  <span className={`text-xs font-medium px-2 py-0.5 rounded-full border ${CLASS_COLORS[booking.seat_class]}`}>
+                    {CLASS_LABELS[booking.seat_class]}
+                  </span>
+                )}
               </div>
             </div>
           </div>
@@ -94,7 +115,7 @@ export const BookingCard = ({ booking, flight, onCancel, isCancelling }: Booking
             <div className="flex items-center justify-between pt-3 border-t border-white/10">
               <span className="text-sm text-star-white/60">Price</span>
               <span className="text-lg font-bold text-star-white">
-                {formatCurrency(flight.price)}
+                {bookedClassPrice !== undefined ? formatCurrency(bookedClassPrice) : formatCurrency(flight.price)}
               </span>
             </div>
           </div>

@@ -15,7 +15,7 @@ A modern, space-themed frontend for the Galaxium Travels interplanetary booking 
 
 ## 🛠️ Tech Stack
 
-- **React 18** - UI library
+- **React 19** - UI library
 - **TypeScript** - Type safety
 - **Vite** - Build tool and dev server
 - **Tailwind CSS** - Utility-first styling
@@ -215,17 +215,21 @@ npm run build
 
 ### Docker
 
+> ⚠️ Para ambientes IBM, use imagens base do registry Red Hat em vez de `node:alpine` e `nginx:alpine`.
+
 ```dockerfile
-FROM node:18-alpine as build
+# Estágio de build
+FROM registry.redhat.io/ubi9/nodejs-18-minimal:latest AS build
 WORKDIR /app
 COPY package*.json ./
 RUN npm install
 COPY . .
 RUN npm run build
 
-FROM nginx:alpine
+# Estágio de produção — servir via nginx UBI
+FROM registry.redhat.io/ubi9/nginx-120:latest
 COPY --from=build /app/dist /usr/share/nginx/html
-EXPOSE 80
+EXPOSE 8080
 CMD ["nginx", "-g", "daemon off;"]
 ```
 
@@ -242,21 +246,6 @@ CMD ["nginx", "-g", "daemon off;"]
 - Clear node_modules: `rm -rf node_modules && npm install`
 - Clear Vite cache: `rm -rf node_modules/.vite`
 
-## 📝 License
-
-This project is part of the Galaxium Travels booking system.
-
-## 🤝 Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Submit a pull request
-
-## 📧 Support
-
-For issues or questions, please open an issue on GitHub.
-
 ---
 
-**Built with ❤️ for space travelers** 🚀
+**Construído para viajantes espaciais** 🚀✨

@@ -1,6 +1,6 @@
-import type { Flight } from '../../types';
+import type { Flight, FlightSeatClass } from '../../types';
 import { Card, Button } from '../common';
-import { Plane, Clock, DollarSign, Users } from 'lucide-react';
+import { Plane, Clock, DollarSign } from 'lucide-react';
 import { formatCurrency, formatDate, formatTime, calculateDuration } from '../../utils/formatters';
 import { motion } from 'framer-motion';
 
@@ -9,9 +9,22 @@ interface FlightCardProps {
   onBook: (flight: Flight) => void;
 }
 
+const CLASS_LABELS: Record<string, string> = {
+  economy: 'Econômica',
+  executive: 'Executiva',
+  galaxium: 'Galaxium',
+};
+
 export const FlightCard = ({ flight, onBook }: FlightCardProps) => {
-  const isLowSeats = flight.seats_available <= 2;
-  const isSoldOut = flight.seats_available === 0;
+  const hasSeatClasses = flight.seat_classes && flight.seat_classes.length > 0;
+
+  const isSoldOut = hasSeatClasses
+    ? flight.seat_classes.every(sc => sc.seats_available === 0)
+    : flight.seats_available === 0;
+
+  const displayPrice = hasSeatClasses
+    ? Math.min(...flight.seat_classes.map(sc => sc.price))
+    : flight.price;
 
   return (
     <motion.div
@@ -73,19 +86,40 @@ export const FlightCard = ({ flight, onBook }: FlightCardProps) => {
           {/* Price */}
           <div className="flex items-center gap-2">
             <DollarSign size={16} className="text-alien-green" />
+            <span className="text-xs text-star-white/60 mr-1">from</span>
             <span className="text-2xl font-bold text-star-white">
-              {formatCurrency(flight.price)}
+              {formatCurrency(displayPrice)}
             </span>
-            <span className="text-sm text-star-white/60">per seat</span>
           </div>
 
-          {/* Seats Available */}
-          <div className="flex items-center gap-2">
-            <Users size={16} className={isLowSeats ? 'text-solar-orange' : 'text-star-white/70'} />
-            <span className={`text-sm ${isLowSeats ? 'text-solar-orange font-semibold' : 'text-star-white/70'}`}>
-              {isSoldOut ? 'Sold Out' : `${flight.seats_available} seats available`}
-            </span>
-          </div>
+          {/* Per-Class Availability */}
+          {hasSeatClasses && (
+            <div className="space-y-1 pt-1 border-t border-white/10">
+              {flight.seat_classes.map((sc: FlightSeatClass) => {
+                const isClassSoldOut = sc.seats_available === 0;
+                const isClassLow = !isClassSoldOut && sc.seats_available <= 2;
+                return (
+                  <div key={sc.class_name} className="flex items-center justify-between text-xs">
+                    <span className="text-star-white/70 w-20">
+                      {CLASS_LABELS[sc.class_name] ?? sc.class_name}
+                    </span>
+                    <span className="text-star-white/50">{formatCurrency(sc.price)}</span>
+                    <span
+                      className={
+                        isClassSoldOut
+                          ? 'text-red-400 font-semibold'
+                          : isClassLow
+                          ? 'text-solar-orange font-semibold'
+                          : 'text-star-white/60'
+                      }
+                    >
+                      {isClassSoldOut ? 'Esgotado' : `${sc.seats_available} lugares`}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
 
         {/* Book Button */}

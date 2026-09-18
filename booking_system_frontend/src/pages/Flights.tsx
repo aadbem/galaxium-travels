@@ -1,58 +1,108 @@
-import { useState, useEffect } from 'react';
-import type { Flight } from '../types';
+import { useState, useEffect, useMemo } from 'react';
+import type { Flight, FlightFilters } from '../types';
 import { LoadingSpinner } from '../components/common';
 import { FlightCard } from '../components/flights/FlightCard';
 import { UserIdentification } from '../components/user/UserIdentification';
 import { BookingModal } from '../components/bookings/BookingModal';
 import { getFlights } from '../services/api';
 import { useUser } from '../hooks/useUser';
-import { Search, Filter } from 'lucide-react';
+import { Filter } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { motion } from 'framer-motion';
+
+const EMPTY_FILTERS: FlightFilters = {
+  origin: '',
+  destination: '',
+  minPrice: undefined,
+  maxPrice: undefined,
+};
+
+/** Retorna o preço da classe econômica de um voo, ou Infinity se não existir. */
+const economyPrice = (flight: Flight): number =>
+  flight.seat_classes.find((c) => c.class_name === 'economy')?.price ?? Infinity;
 
 export const Flights = () => {
   const { user } = useUser();
   const [flights, setFlights] = useState<Flight[]>([]);
   const [filteredFlights, setFilteredFlights] = useState<Flight[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState('');
+  const [filters, setFilters] = useState<FlightFilters>(EMPTY_FILTERS);
   const [selectedFlight, setSelectedFlight] = useState<Flight | null>(null);
   const [showUserModal, setShowUserModal] = useState(false);
   const [showBookingModal, setShowBookingModal] = useState(false);
+
+  /** Listas únicas de origens e destinos derivadas dos voos carregados. */
+  const origins = useMemo(
+    () => [...new Set(flights.map((f) => f.origin))].sort(),
+    [flights],
+  );
+  const destinations = useMemo(
+    () => [...new Set(flights.map((f) => f.destination))].sort(),
+    [flights],
+  );
 
   // Fetch flights on mount
   useEffect(() => {
     loadFlights();
   }, []);
 
-  // Filter flights when search term changes
+  // Aplica filtros sempre que flights ou filters mudam
   useEffect(() => {
-    if (!searchTerm.trim()) {
-      setFilteredFlights(flights);
-      return;
+    let result = flights;
+
+    if (filters.origin) {
+      result = result.filter((f) => f.origin === filters.origin);
+    }
+    if (filters.destination) {
+      result = result.filter((f) => f.destination === filters.destination);
+    }
+    if (filters.minPrice !== undefined) {
+      result = result.filter((f) => economyPrice(f) >= filters.minPrice!);
+    }
+    if (filters.maxPrice !== undefined) {
+      result = result.filter((f) => economyPrice(f) <= filters.maxPrice!);
     }
 
-    const term = searchTerm.toLowerCase();
-    const filtered = flights.filter(
-      (flight) =>
-        flight.origin.toLowerCase().includes(term) ||
-        flight.destination.toLowerCase().includes(term)
-    );
-    setFilteredFlights(filtered);
-  }, [searchTerm, flights]);
+    setFilteredFlights(result);
+  }, [filters, flights]);
 
-  const loadFlights = async () => {
+  /** Atualiza um campo individual dos filtros. */
+  const handleFilterChange = <K extends keyof FlightFilters>(
+    key: K,
+    value: FlightFilters[K],
+  ) => {
+    setFilters((prev) => ({ ...prev, [key]: value }));
+  };
+
+  const hasActiveFilters =
+    !!filters.origin ||
+    !!filters.destination ||
+    filters.minPrice !== undefined ||
+    filters.maxPrice !== undefined;
+
+  const loadFlights = async (retryCount = 0) => {
+    const MAX_RETRIES = 3;
+    const RETRY_DELAY = 1000; // 1 second
+
     setIsLoading(true);
     try {
       const data = await getFlights();
       setFlights(data);
       setFilteredFlights(data);
     } catch (error: any) {
-      toast.error('Failed to load flights');
-      console.error(error);
-    } finally {
-      setIsLoading(false);
+      if (retryCount < MAX_RETRIES) {
+        toast.error(`Failed to load flights. Retrying... (${retryCount + 1}/${MAX_RETRIES})`);
+        setTimeout(() => {
+          loadFlights(retryCount + 1);
+        }, RETRY_DELAY * (retryCount + 1)); // Exponential backoff
+      } else {
+        toast.error('Failed to load flights after multiple attempts');
+        console.error(error);
+        setIsLoading(false);
+      }
+      return;
     }
+    setIsLoading(false);
   };
 
   const handleBookFlight = (flight: Flight) => {
@@ -93,32 +143,87 @@ export const Flights = () => {
         </p>
       </motion.div>
 
-      {/* Search and Filters */}
+      {/* Filtros */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.1 }}
         className="glass-card p-6"
       >
-        <div className="flex flex-col md:flex-row gap-4">
-          {/* Search */}
-          <div className="flex-1 relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-star-white/50" size={20} />
+        <div className="flex flex-col md:flex-row gap-4 items-end">
+          {/* Origem */}
+          <div className="flex-1 flex flex-col gap-1">
+            <label className="text-star-white/60 text-xs uppercase tracking-wider">Origem</label>
+            <select
+              value={filters.origin ?? ''}
+              onChange={(e) => handleFilterChange('origin', e.target.value || undefined)}
+              className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-star-white focus:outline-none focus:ring-2 focus:ring-cosmic-purple"
+            >
+              <option value="">Todas as origens</option>
+              {origins.map((o) => (
+                <option key={o} value={o}>{o}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Destino */}
+          <div className="flex-1 flex flex-col gap-1">
+            <label className="text-star-white/60 text-xs uppercase tracking-wider">Destino</label>
+            <select
+              value={filters.destination ?? ''}
+              onChange={(e) => handleFilterChange('destination', e.target.value || undefined)}
+              className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-star-white focus:outline-none focus:ring-2 focus:ring-cosmic-purple"
+            >
+              <option value="">Todos os destinos</option>
+              {destinations.map((d) => (
+                <option key={d} value={d}>{d}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Faixa de preço — classe Econômica */}
+          <div className="flex flex-col gap-1">
+            <label className="text-star-white/60 text-xs uppercase tracking-wider">Preço Econômica (min)</label>
             <input
-              type="text"
-              placeholder="Search by origin or destination..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-3 bg-white/5 border border-white/10 rounded-lg text-star-white placeholder-star-white/50 focus:outline-none focus:ring-2 focus:ring-cosmic-purple"
+              type="number"
+              min={0}
+              placeholder="Mín."
+              value={filters.minPrice ?? ''}
+              onChange={(e) =>
+                handleFilterChange('minPrice', e.target.value ? Number(e.target.value) : undefined)
+              }
+              className="w-32 px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-star-white placeholder-star-white/50 focus:outline-none focus:ring-2 focus:ring-cosmic-purple"
             />
           </div>
 
-          {/* Filter indicator */}
-          <div className="flex items-center gap-2 text-star-white/70">
+          <div className="flex flex-col gap-1">
+            <label className="text-star-white/60 text-xs uppercase tracking-wider">Preço Econômica (max)</label>
+            <input
+              type="number"
+              min={0}
+              placeholder="Máx."
+              value={filters.maxPrice ?? ''}
+              onChange={(e) =>
+                handleFilterChange('maxPrice', e.target.value ? Number(e.target.value) : undefined)
+              }
+              className="w-32 px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-star-white placeholder-star-white/50 focus:outline-none focus:ring-2 focus:ring-cosmic-purple"
+            />
+          </div>
+
+          {/* Indicador + Limpar */}
+          <div className="flex items-center gap-3 text-star-white/70 pb-1">
             <Filter size={20} />
-            <span className="text-sm">
-              {filteredFlights.length} of {flights.length} flights
+            <span className="text-sm whitespace-nowrap">
+              {filteredFlights.length} de {flights.length} voos
             </span>
+            {hasActiveFilters && (
+              <button
+                onClick={() => setFilters(EMPTY_FILTERS)}
+                className="text-xs text-nebula-pink hover:text-nebula-pink/80 underline whitespace-nowrap"
+              >
+                Limpar filtros
+              </button>
+            )}
           </div>
         </div>
       </motion.div>
@@ -133,7 +238,7 @@ export const Flights = () => {
           className="text-center py-12"
         >
           <p className="text-star-white/70 text-lg">
-            {searchTerm ? 'No flights found matching your search' : 'No flights available'}
+            {hasActiveFilters ? 'Nenhum voo encontrado com os filtros aplicados' : 'Nenhum voo disponível'}
           </p>
         </motion.div>
       ) : (
